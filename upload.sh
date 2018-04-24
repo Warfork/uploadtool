@@ -10,15 +10,15 @@ else
   echo "Neither sha256sum nor shasum is available, cannot check hashes"
 fi
 
-# The calling script (usually .travis.yml) can set a suffix to be used for
+# The calling script can set a suffix to be used for
 # the tag and release name. This way it is possible to have a release for
 # the output of the CI/CD pipeline (marked as 'continuous') and also test
 # builds for other branches.
 # If this build was triggered by a tag, call the result a Release
 if [ ! -z $UPLOADTOOL_SUFFIX ] ; then
-  if [ "$UPLOADTOOL_SUFFIX" = "$TRAVIS_TAG" ] ; then
-    RELEASE_NAME=$TRAVIS_TAG
-    RELEASE_TITLE="Release build ($TRAVIS_TAG)"
+  if [ "$UPLOADTOOL_SUFFIX" = "$CIRCLE_TAG" ] ; then
+    RELEASE_NAME=$CIRCLE_TAG
+    RELEASE_TITLE="Release build ($CIRCLE_TAG)"
     is_prerelease="false"
   else
     RELEASE_NAME="continuous-$UPLOADTOOL_SUFFIX"
@@ -31,7 +31,7 @@ else
   is_prerelease="true"
 fi
 
-if [ "$TRAVIS_EVENT_TYPE" == "pull_request" ] ; then
+if [ ! -z "$CIRCLE_PULL_REQUESTS" ] ; then
   echo "Release uploading disabled for pull requests, uploading to transfer.sh instead"
   for FILE in $@ ; do
     BASENAME="$(basename "${FILE}")"
@@ -42,21 +42,21 @@ if [ "$TRAVIS_EVENT_TYPE" == "pull_request" ] ; then
   exit 0
 fi
 
-if [ ! -z "$TRAVIS_REPO_SLUG" ] ; then
-  # We are running on Travis CI
-  echo "Running on Travis CI"
-  echo "TRAVIS_COMMIT: $TRAVIS_COMMIT"
-  REPO_SLUG="$TRAVIS_REPO_SLUG"
+if [ ! -z $CIRCLECI ] ; then
+  # We are running on Circle CI
+  echo "Running on Circle CI"
+  echo "CIRCLE_SHA1: $CIRCLE_SHA1"
+  REPO_SLUG="${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}"
   if [ -z "$GITHUB_TOKEN" ] ; then
-    echo "\$GITHUB_TOKEN missing, please set it in the Travis CI settings of this project"
+    echo "\$GITHUB_TOKEN missing, please set it in the Circle CI settings of this project"
     echo "You can get one from https://github.com/settings/tokens"
     exit 1
   fi
 else
-  # We are not running on Travis CI
-  echo "Not running on Travis CI"
+  # We are not running on Circle CI
+  echo "Not running on Circle CI"
   if [ -z "$REPO_SLUG" ] ; then
-    read -s -p "Repo Slug (GitHub and Travis CI username/reponame): " REPO_SLUG
+    read -s -p "Repo Slug (GitHub and Circle CI username/reponame): " REPO_SLUG
   fi
   if [ -z "$GITHUB_TOKEN" ] ; then
     read -s -p "Token (https://github.com/settings/tokens): " GITHUB_TOKEN
@@ -81,10 +81,10 @@ echo "upload_url: $upload_url"
 release_url=$(echo "$release_infos" | grep '"url":' | head -n 1 | cut -d '"' -f 4 | cut -d '{' -f 1)
 echo "release_url: $release_url"
 
-if [ "$TRAVIS_COMMIT" != "$tag_sha" ] ; then
+if [ "$CIRCLE_SHA1" != "$tag_sha" ] ; then
 
-  echo "TRAVIS_COMMIT != tag_sha, hence deleting $RELEASE_NAME..."
-  
+  echo "CIRCLE_SHA1 != tag_sha, hence deleting $RELEASE_NAME..."
+
   if [ ! -z "$release_id" ]; then
     delete_url="https://api.github.com/repos/$REPO_SLUG/releases/$release_id"
     echo "Delete the release..."
@@ -112,18 +112,14 @@ if [ "$TRAVIS_COMMIT" != "$tag_sha" ] ; then
 
   echo "Create release..."
 
-  if [ -z "$TRAVIS_BRANCH" ] ; then
-    TRAVIS_BRANCH="master"
+  if [ -z "$CIRCLE_BRANCH" ] ; then
+    CIRCLE_BRANCH="master"
   fi
 
-  if [ ! -z "$TRAVIS_JOB_ID" ] ; then
-    BODY="Travis CI build log: https://travis-ci.org/$REPO_SLUG/builds/$TRAVIS_BUILD_ID/"
-  else
-    BODY=""
-  fi
+  BODY=""
 
   release_infos=$(curl -H "Authorization: token ${GITHUB_TOKEN}" \
-       --data '{"tag_name": "'"$RELEASE_NAME"'","target_commitish": "'"$TRAVIS_COMMIT"'","name": "'"$RELEASE_TITLE"'","body": "'"$BODY"'","draft": false,"prerelease": '$is_prerelease'}' "https://api.github.com/repos/$REPO_SLUG/releases")
+       --data '{"tag_name": "'"$RELEASE_NAME"'","target_commitish": "'"$CIRCLE_SHA1"'","name": "'"$RELEASE_TITLE"'","body": "'"$BODY"'","draft": false,"prerelease": '$is_prerelease'}' "https://api.github.com/repos/$REPO_SLUG/releases")
 
   echo "$release_infos"
 
@@ -135,7 +131,7 @@ if [ "$TRAVIS_COMMIT" != "$tag_sha" ] ; then
   release_url=$(echo "$release_infos" | grep '"url":' | head -n 1 | cut -d '"' -f 4 | cut -d '{' -f 1)
   echo "release_url: $release_url"
 
-fi # if [ "$TRAVIS_COMMIT" != "$tag_sha" ]
+fi # if [ "$CIRCLE_SHA1" != "$tag_sha" ]
 
 if [ -z "$release_url" ] ; then
 	echo "Cannot figure out the release URL for $RELEASE_NAME"
@@ -157,11 +153,11 @@ done
 
 $shatool $@
 
-if [ "$TRAVIS_COMMIT" != "$tag_sha" ] ; then
+if [ "$CIRCLE_SHA1" != "$tag_sha" ] ; then
   echo "Publish the release..."
 
   release_infos=$(curl -H "Authorization: token ${GITHUB_TOKEN}" \
        --data '{"draft": false}' "$release_url")
 
   echo "$release_infos"
-fi # if [ "$TRAVIS_COMMIT" != "$tag_sha" ]
+fi # if [ "$CIRCLE_SHA1" != "$tag_sha" ]
