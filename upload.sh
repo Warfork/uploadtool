@@ -31,7 +31,7 @@ else
   is_prerelease="true"
 fi
 
-if [ ! -z "$CIRCLE_PULL_REQUESTS" ] ; then
+if [ "$CIRCLE_BRANCH" != "master" ] ; then
   echo "Release uploading disabled for pull requests, uploading to transfer.sh instead"
   for FILE in $@ ; do
     BASENAME="$(basename "${FILE}")"
