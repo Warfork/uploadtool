@@ -35,7 +35,7 @@ if [ "$TRAVIS_EVENT_TYPE" == "pull_request" ] ; then
   echo "Release uploading disabled for pull requests, uploading to file.io instead"
   for FILE in $@ ; do
     BASENAME="$(basename "${FILE}")"
-    curl -F "file=@"$BASENAME https://file.io/?expires=1w || true
+    curl -F "file=@"$FILE https://file.io/?expires=1w || true
     echo ""
   done
   $shatool $@
